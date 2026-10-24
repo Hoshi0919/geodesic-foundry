@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geodesic Foundry · 测地工场</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body {
+            background-color: #030712;
+            color: #f3f4f6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            padding: 12px 24px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #38bdf8, #0284c7, #000);
+            box-shadow: 0 0 16px rgba(56, 189, 248, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .brand h1 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            background: linear-gradient(135deg, #f9fafb, #93c5fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .brand span {
+            font-size: 0.75rem;
+            color: #64748b;
+            font-weight: 500;
+            padding-left: 6px;
+            border-left: 1px solid #334155;
+        }
+        .scenario-selector {
+            display: flex;
+            gap: 8px;
+            background: rgba(30, 41, 59, 0.6);
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .scenario-btn {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .scenario-btn:hover {
+            color: #f8fafc;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .scenario-btn.active {
+            background: #0284c7;
+            color: #ffffff;
+            box-shadow: 0 0 12px rgba(2, 132, 199, 0.5);
+        }
+        .main-container {
+            flex: 1;
+            position: relative;
+            display: flex;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .hud-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 290px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 18px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+            pointer-events: auto;
+            z-index: 5;
+        }
+        .hud-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #94a3b8;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .telemetry-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 10px;
+            font-size: 0.85rem;
+        }
+        .telemetry-label {
+            color: #64748b;
+        }
+        .telemetry-value {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+        .highlight-blue { color: #38bdf8; }
+        .highlight-amber { color: #f59e0b; }
+        .highlight-emerald { color: #10b981; }
+        .highlight-purple { color: #c084fc; }
+
+        .scenario-desc-box {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.78rem;
+            line-height: 1.5;
+            color: #cbd5e1;
+        }
+        .controls-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <div class="brand-icon"></div>
+            <h1>Geodesic Foundry</h1>
+            <span>测地工场 · 广义相对论时空物流</span>
+        </div>
+        <div class="scenario-selector">
+            <button class="scenario-btn active" onclick="switchScenario('lensing')">1. 引力透镜分选</button>
+            <button class="scenario-btn" onclick="switchScenario('penrose')">2. 彭罗斯能层超辐射</button>
+            <button class="scenario-btn" onclick="switchScenario('dilation')">3. 时间膨胀深井</button>
+            <button class="scenario-btn" onclick="switchScenario('freeform')">4. 自由时空沙盒</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <canvas id="viewport"></canvas>
+
+        <div class="hud-panel">
+            <div class="hud-title">
+                <span>时空动力学遥测</span>
+                <span class="highlight-emerald" id="status-live">● RUNNING</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">在途测地微粒</span>
+                <span class="telemetry-value highlight-blue" id="val-payloads">0</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">平均本征时间膨胀</span>
+                <span class="telemetry-value highlight-purple" id="val-dilation">1.000 dτ/dt</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">彭罗斯萃取能 (a-Spin)</span>
+                <span class="telemetry-value highlight-amber" id="val-penrose">0.00 MeV</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">轨道接收有效产出</span>
+                <span class="telemetry-value highlight-emerald" id="val-captured">0 / 0</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">事件视界吞噬数</span>
+                <span class="telemetry-value" id="val-swallowed" style="color: #ef4444;">0</span>
+            </div>
+
+            <div class="scenario-desc-box" id="scenario-desc">
+                <strong>引力透镜色散分选机</strong><br>
+                中央史瓦西黑洞形成引力透镜。高能光子流（偏转角 Δφ ≈ 4GM/c²b）与重子束流自然分离至不同轨道接收仓。
+            </div>
+        </div>
+
+        <div class="controls-hint" id="controls-hint">
+            提示：左键拖拽质量奇点 · 滚轮微调自旋参数 · 空间网格实时响应时空曲率
+        </div>
+    </div>
+
+    <script>
+        // --- 物理常数与环境标定 ---
+        const G = 1000.0;
+        const C = 100.0;
+        const C_SQ = C * C;
+
+        const canvas = document.getElementById('viewport');
+        const ctx = canvas.getContext('2d');
+
+        let width = 0;
+        let height = 0;
+
+        function resize() {
+            width = canvas.parentElement.clientWidth;
+            height = canvas.parentElement.clientHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- Web Audio 相对论引力声景 ---
+        class GravitationalAudio {
+            constructor() {
+                this.ctx = null;
+                this.inited = false;
+            }
+            init() {
+                if (this.inited) return;
+                try {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) {
+                        this.ctx = new AudioCtx();
+                        this.inited = true;
+                    }
+                } catch (e) {}
+            }
+            playPenroseChirp() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                const now = this.ctx.currentTime;
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(1100, now + 0.18);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.22);
+            }
+            playCaptureChime() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                const now = this.ctx.currentTime;
+                osc.frequency.setValueAtTime(659.25, now);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.35);
+            }
+        }
+        const audio = new GravitationalAudio();
+        window.addEventListener('click', () => audio.init(), { once: true });
+
+        // --- 数据结构 ---
+        class SingularityNode {
+            constructor(id, name, x, y, mass = 120, spin = 0) {
+                this.id = id;
+                this.name = name;
+                this.x = x;
+                this.y = y;
+                this.mass = mass;
+                this.spin = spin;
+                this.absorbedCount = 0;
+                this.extractedEnergy = 0;
+            }
+            get rs() { return (2 * G * this.mass) / C_SQ; }
+            get rPhoton() { return (3 * G * this.mass) / C_SQ; }
+            get rIsco() { return (6 * G * this.mass) / C_SQ; }
+            get rErgo() { return (2 * G * this.mass) / C_SQ; }
+            get rPlus() {
+                const mGeom = (G * this.mass) / C_SQ;
+                return mGeom * (1.0 + Math.sqrt(Math.max(0, 1.0 - this.spin * this.spin)));
+            }
+        }
+
+        class PayloadParticle {
+            constructor(name, x, y, vx, vy, restMass = 1.0, tauHalf = null, color = '#38bdf8') {
+                this.id = Math.random().toString(36).substr(2, 6);
+                this.name = name;
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.restMass = restMass;
+                this.tauHalf = tauHalf;
+                this.color = color;
+
+                this.properTime = 0.0;
+                this.labTime = 0.0;
+                this.dilation = 1.0;
+                this.isDecayed = false;
+                this.isAbsorbed = false;
+                this.isCaptured = false;
+                this.energyBoosted = false;
+                this.trail = [[x, y]];
+            }
+            get speed() { return Math.hypot(this.vx, this.vy); }
+            get energy() { return 0.5 * this.restMass * (this.speed * this.speed); }
+        }
+
+        class EmitterNode {
+            constructor(id, name, x, y, vx, vy, interval, payloadName, mass, tauHalf, color) {
+                this.id = id;
+                this.name = name;
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.interval = interval;
+                this.payloadName = payloadName;
+                this.mass = mass;
+                this.tauHalf = tauHalf;
+                this.color = color;
+                this.timer = 0;
+                this.emitted = 0;
+            }
+            tick() {
+                this.timer++;
+                if (this.timer >= this.interval) {
+                    this.timer = 0;
+                    this.emitted++;
+                    return new PayloadParticle(
+                        `${this.payloadName}#${this.emitted}`,
+                        this.x, this.y, this.vx, this.vy,
+                        this.mass, this.tauHalf, this.color
+                    );
+                }
+                return null;
+            }
+        }
+
+        class CollectorNode {
+            constructor(id, name, x, y, radius, minEnergy, rejectDecayed, color) {
+                this.id = id;
+                this.name = name;
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.minEnergy = minEnergy;
+                this.rejectDecayed = rejectDecayed;
+                this.color = color;
+                this.collected = 0;
+                this.rejected = 0;
+            }
+        }
+
+        // --- 仿真系统状态 ---
+        let currentScenario = 'lensing';
+        const singularities = [];
+        const emitters = [];
+        const collectors = [];
+        let payloads = [];
+        let totalSwallowed = 0;
+        let penroseEvents = 0;
+        let totalExtracted = 0;
+
+        // 交互拖拽状态
+        let draggedNode = null;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            for (const s of singularities) {
+                if (Math.hypot(s.x - mx, s.y - my) < s.rErgo + 15) {
+                    draggedNode = s;
+                    dragOffsetX = s.x - mx;
+                    dragOffsetY = s.y - my;
+                    break;
+                }
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (draggedNode) {
+                const rect = canvas.getBoundingClientRect();
+                draggedNode.x = e.clientX - rect.left + dragOffsetX;
+                draggedNode.y = e.clientY - rect.top + dragOffsetY;
+            }
+        });
+
+        window.addEventListener('mouseup', () => { draggedNode = null; });
+
+        // --- 场景构建 ---
+        function switchScenario(scen) {
+            currentScenario = scen;
+            document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+            const idx = {'lensing': 0, 'penrose': 1, 'dilation': 2, 'freeform': 3}[scen];
+            document.querySelectorAll('.scenario-btn')[idx].classList.add('active');
+
+            singularities.length = 0;
+            emitters.length = 0;
+            collectors.length = 0;
+            payloads = [];
+            totalSwallowed = 0;
+            penroseEvents = 0;
+            totalExtracted = 0;
+
+            const cx = width > 0 ? width * 0.48 : 450;
+            const cy = height > 0 ? height * 0.5 : 300;
+
+            if (scen === 'lensing') {
+                document.getElementById('scenario-desc').innerHTML = `
+                    <strong>场景 1：引力透镜色散分选机</strong><br>
+                    中央史瓦西黑洞形成引力透镜。高能光子流（偏转角 Δφ ≈ 4GM/c²b）与重子束流（经典低速大偏转）无需接触即可被天然分离至上下独立接收仓。
+                `;
+                singularities.push(new SingularityNode('bh-lens', 'Schwarzschild Lens', cx, cy, 140, 0.0));
+                emitters.push(new EmitterNode('e-fast', '光子束流', 100, cy - 110, 68, 0, 32, 'Photon', 0.2, null, '#38bdf8'));
+                emitters.push(new EmitterNode('e-slow', '重核重子流', 100, cy - 80, 36, 0, 48, 'Baryon', 2.0, null, '#ec4899'));
+                collectors.push(new CollectorNode('c-fast', '光子偏折靶', cx + 280, cy - 140, 32, 0, true, '#38bdf8'));
+                collectors.push(new CollectorNode('c-slow', '重子偏折靶', cx + 180, cy + 220, 36, 0, true, '#ec4899'));
+            } else if (scen === 'penrose') {
+                document.getElementById('scenario-desc').innerHTML = `
+                    <strong>场景 2：彭罗斯黑洞能层超辐射加速器</strong><br>
+                    高自旋克尔黑洞（a=0.94）。载荷以临界掠射角切入能层并触发裂解：负能碎片坠落视界，正能超辐射脉冲以 140%+ 动能狂暴喷出！
+                `;
+                singularities.push(new SingularityNode('kerr-rot', 'Kerr Singularity (a=0.94)', cx, cy, 150, 0.94));
+                emitters.push(new EmitterNode('e-penrose', '复合核原坯', 120, cy - 50, 46, 3, 35, 'Raw-Core', 2.0, null, '#a855f7'));
+                collectors.push(new CollectorNode('c-super', '超能电池组', cx + 300, cy + 120, 42, 1800, false, '#f59e0b'));
+            } else if (scen === 'dilation') {
+                document.getElementById('scenario-desc').innerHTML = `
+                    <strong>场景 3：引力时间膨胀低温井</strong><br>
+                    同位素固有寿命仅 1.8 秒。若在平直时空中运输会在半途自然衰变；引导其掠过强引力深井边缘，相对论时间膨胀将本征时冻结，完好存活抵达！
+                `;
+                singularities.push(new SingularityNode('bh-cryo', 'Chrono-Gravity Well', cx, cy - 20, 160, 0.0));
+                emitters.push(new EmitterNode('e-decay', '极速衰变源 (τ=1.8s)', 120, cy - 140, 42, 10, 32, 'Tau-9', 1.0, 1.8, '#06b6d4'));
+                collectors.push(new CollectorNode('c-pure', '原生冷冻仓', cx + 290, cy + 20, 38, 0, true, '#10b981'));
+            } else if (scen === 'freeform') {
+                document.getElementById('scenario-desc').innerHTML = `
+                    <strong>场景 4：双奇点自平衡时空沙盒</strong><br>
+                    双黑洞自旋引力场。拖拽奇点位置，观察弯曲时空几何如何像看不见的手一样引导所有物料自主形成复杂物流交织。
+                `;
+                singularities.push(new SingularityNode('bh-1', 'Alpha Singularity', cx - 120, cy, 95, 0.6));
+                singularities.push(new SingularityNode('bh-2', 'Beta Singularity', cx + 120, cy, 95, -0.6));
+                emitters.push(new EmitterNode('e-sand', '中央物料流', cx, 80, 0, 32, 28, 'ExoMatter', 1.0, null, '#6366f1'));
+                collectors.push(new CollectorNode('c-sand', '极区回收井', cx, cy + 240, 45, 0, false, '#10b981'));
+            }
+        }
+        switchScenario('lensing');
+
+        // --- 物理更新步进 ---
+        function updatePhysics() {
+            // 发射器发射
+            for (const em of emitters) {
+                const p = em.tick();
+                if (p) payloads.push(p);
+            }
+
+            const dt = 0.035;
+            const newPayloads = [];
+
+            for (const p of payloads) {
+                if (p.isAbsorbed || p.isCaptured) continue;
+
+                // 彭罗斯分裂判定
+                let split = false;
+                for (const s of singularities) {
+                    if (Math.abs(s.spin) > 0.1) {
+                        const dist = Math.hypot(p.x - s.x, p.y - s.y);
+                        if (dist > s.rPlus && dist <= s.rErgo && !p.energyBoosted && !p.isDecayed) {
+                            // 能层分裂！
+                            const dx = p.x - s.x;
+                            const dy = p.y - s.y;
+                            const spinSign = s.spin >= 0 ? 1 : -1;
+                            const tx = -spinSign * (dy / dist);
+                            const ty = spinSign * (dx / dist);
+                            const rx = -dx / dist;
+                            const ry = -dy / dist;
+
+                            // 坠落负能碎片
+                            const retro = new PayloadParticle(`${p.name}-Neg`, p.x, p.y, rx * 25 - tx * 15, ry * 25 - ty * 15, p.restMass * 0.4, p.tauHalf, '#ef4444');
+                            retro.isAbsorbed = true;
+                            newPayloads.push(retro);
+
+                            // 逃逸超能脉冲
+                            const boost = Math.sqrt(1.0 + 0.45 * Math.abs(s.spin));
+                            const esc = new PayloadParticle(`${p.name}-Hyper`, p.x, p.y, p.vx * boost + tx * 22, p.vy * boost + ty * 22, p.restMass * 0.6, p.tauHalf ? p.tauHalf * 1.5 : null, '#f59e0b');
+                            esc.energyBoosted = true;
+                            newPayloads.push(esc);
+
+                            p.isAbsorbed = true;
+                            s.absorbedCount++;
+                            penroseEvents++;
+                            const gain = p.energy * 0.45 * Math.abs(s.spin);
+                            s.extractedEnergy += gain;
+                            totalExtracted += gain;
+
+                            audio.playPenroseChirp();
+                            split = true;
+                            break;
+                        }
+                    }
+                }
+                if (split) continue;
+
+                // 相对论测地线积分 (1PN 修正 + 伦斯-蒂尔林效应)
+                let ax = 0, ay = 0;
+                let sumPot = 0;
+                const vSq = p.vx * p.vx + p.vy * p.vy;
+
+                for (const s of singularities) {
+                    const dx = s.x - p.x;
+                    const dy = s.y - p.y;
+                    const r = Math.hypot(dx, dy);
+
+                    if (r <= s.rs) {
+                        p.isAbsorbed = true;
+                        s.absorbedCount++;
+                        totalSwallowed++;
+                        break;
+                    }
+
+                    const aMag = (G * s.mass) / (r * r + 4.0);
+                    const ux = dx / r;
+                    const uy = dy / r;
+
+                    // 1PN 相对论因子
+                    const relFactor = 1.0 + (3.0 * vSq / C_SQ) - (4.0 * G * s.mass / (C_SQ * r));
+                    ax += aMag * ux * relFactor;
+                    ay += aMag * uy * relFactor;
+
+                    // 速度阻尼辐射项
+                    const vDotU = (p.vx * ux + p.vy * uy);
+                    const velTerm = (4.0 * aMag * vDotU / C_SQ);
+                    ax -= velTerm * p.vx;
+                    ay -= velTerm * p.vy;
+
+                    // 自旋参考系拖拽
+                    if (Math.abs(s.spin) > 0.01) {
+                        const tx = -uy * (s.spin > 0 ? 1 : -1);
+                        const ty = ux * (s.spin > 0 ? 1 : -1);
+                        const dragMag = (2.0 * G * s.mass * Math.abs(s.spin) * C) / (r * r * r + 10.0);
+                        ax += dragMag * tx;
+                        ay += dragMag * ty;
+                    }
+
+                    sumPot += (2.0 * G * s.mass) / (r * C_SQ);
+                }
+
+                if (p.isAbsorbed) continue;
+
+                // 速度半步
+                p.vx += ax * dt;
+                p.vy += ay * dt;
+
+                // 位置全步
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+
+                // 本征时间膨胀
+                const metricTerm = 1.0 - sumPot - (vSq / C_SQ);
+                p.dilation = Math.sqrt(Math.max(0.01, metricTerm));
+                p.labTime += dt;
+                p.properTime += dt * p.dilation;
+
+                if (p.tauHalf && p.properTime >= p.tauHalf) {
+                    p.isDecayed = true;
+                }
+
+                // 轨迹记录
+                p.trail.push([p.x, p.y]);
+                if (p.trail.length > 35) p.trail.shift();
+
+                // 收集器判定
+                for (const c of collectors) {
+                    if (Math.hypot(p.x - c.x, p.y - c.y) <= c.radius) {
+                        if (c.rejectDecayed && p.isDecayed) {
+                            c.rejected++;
+                            p.isCaptured = true;
+                        } else if (p.energy >= c.minEnergy) {
+                            c.collected++;
+                            p.isCaptured = true;
+                            audio.playCaptureChime();
+                        } else {
+                            c.rejected++;
+                            p.isCaptured = true;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            payloads.push(...newPayloads);
+
+            // 清理越界或被吸收的粒子
+            payloads = payloads.filter(p => {
+                if (p.isAbsorbed || p.isCaptured) return false;
+                return p.x >= -100 && p.x <= width + 100 && p.y >= -100 && p.y <= height + 100;
+            });
+        }
+
+        // --- 画面渲染 ---
+        function render() {
+            ctx.fillStyle = '#030712';
+            ctx.fillRect(0, 0, width, height);
+
+            // 1. 时空弯曲度规网格渲染
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.05)';
+            ctx.lineWidth = 1;
+            const gridSpacing = 40;
+
+            for (let gx = 0; gx < width; gx += gridSpacing) {
+                ctx.beginPath();
+                for (let gy = 0; gy < height; gy += 15) {
+                    let dx = 0, dy = 0;
+                    for (const s of singularities) {
+                        const rx = s.x - gx;
+                        const ry = s.y - gy;
+                        const dist = Math.hypot(rx, ry);
+                        const warp = (G * s.mass * 0.003) / (dist + 30);
+                        dx += (rx / (dist + 1)) * warp;
+                        dy += (ry / (dist + 1)) * warp;
+                    }
+                    if (gy === 0) ctx.moveTo(gx + dx, gy + dy);
+                    else ctx.lineTo(gx + dx, gy + dy);
+                }
+                ctx.stroke();
+            }
+
+            // 2. 渲染收集器 (Collectors)
+            for (const c of collectors) {
+                ctx.save();
+                ctx.strokeStyle = c.color;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                ctx.fillStyle = c.color;
+                ctx.globalAlpha = 0.15;
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+
+                ctx.font = '11px sans-serif';
+                ctx.fillStyle = '#94a3b8';
+                ctx.textAlign = 'center';
+                ctx.fillText(c.name, c.x, c.y - c.radius - 8);
+                ctx.fillStyle = '#f8fafc';
+                ctx.fillText(`✓ ${c.collected}`, c.x, c.y + 4);
+                ctx.restore();
+            }
+
+            // 3. 渲染发射器 (Emitters)
+            for (const em of emitters) {
+                ctx.save();
+                ctx.fillStyle = em.color;
+                ctx.beginPath();
+                ctx.arc(em.x, em.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 箭头方向
+                const len = 18;
+                const vLen = Math.hypot(em.vx, em.vy) || 1;
+                ctx.strokeStyle = em.color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(em.x, em.y);
+                ctx.lineTo(em.x + (em.vx / vLen) * len, em.y + (em.vy / vLen) * len);
+                ctx.stroke();
+
+                ctx.font = '11px sans-serif';
+                ctx.fillStyle = '#64748b';
+                ctx.textAlign = 'center';
+                ctx.fillText(em.name, em.x, em.y - 12);
+                ctx.restore();
+            }
+
+            // 4. 渲染质量奇点与黑洞 (Singularities)
+            for (const s of singularities) {
+                ctx.save();
+
+                // 能层光晕 (Kerr Ergosphere)
+                if (Math.abs(s.spin) > 0.05) {
+                    const gradient = ctx.createRadialGradient(s.x, s.y, s.rPlus, s.x, s.y, s.rErgo);
+                    gradient.addColorStop(0, 'rgba(245, 158, 11, 0.45)');
+                    gradient.addColorStop(1, 'rgba(245, 158, 11, 0.0)');
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.rErgo, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // 能层边界虚线
+                    ctx.strokeStyle = 'rgba(245, 158, 11, 0.6)';
+                    ctx.setLineDash([3, 3]);
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.rErgo, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // 最内稳定圆轨道 ISCO
+                ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+                ctx.setLineDash([2, 4]);
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.rIsco, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // 光子球 Photon Sphere
+                ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.rPhoton, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 事件视界 (黑洞深核)
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.rs, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#38bdf8';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                // 标签信息
+                ctx.font = '11px sans-serif';
+                ctx.fillStyle = '#cbd5e1';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${s.name}`, s.x, s.y + s.rIsco + 16);
+                ctx.font = '10px monospace';
+                ctx.fillStyle = '#64748b';
+                ctx.fillText(`M=${s.mass}  a=${s.spin}`, s.x, s.y + s.rIsco + 30);
+                ctx.restore();
+            }
+
+            // 5. 渲染物料微粒 (Payloads)
+            for (const p of payloads) {
+                // 绘制拖尾
+                if (p.trail.length > 1) {
+                    ctx.beginPath();
+                    ctx.moveTo(p.trail[0][0], p.trail[0][1]);
+                    for (let i = 1; i < p.trail.length; i++) {
+                        ctx.lineTo(p.trail[i][0], p.trail[i][1]);
+                    }
+                    ctx.strokeStyle = p.isDecayed ? 'rgba(239, 68, 68, 0.3)' : (p.color + '44');
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                // 核心点
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.energyBoosted ? 5.5 : 4, 0, Math.PI * 2);
+                ctx.fillStyle = p.isDecayed ? '#ef4444' : p.color;
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur = p.energyBoosted ? 12 : 6;
+                ctx.fill();
+
+                // 衰变半衰期环形指示计
+                if (p.tauHalf) {
+                    const ratio = Math.min(1.0, p.properTime / p.tauHalf);
+                    ctx.strokeStyle = p.isDecayed ? '#ef4444' : '#10b981';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 8, -Math.PI / 2, -Math.PI / 2 + (1.0 - ratio) * Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                // 时间膨胀光晕
+                if (p.dilation < 0.6 && !p.isDecayed) {
+                    ctx.strokeStyle = 'rgba(192, 132, 252, 0.8)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 11, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+            // 6. 更新 HUD 遥测数值
+            document.getElementById('val-payloads').innerText = payloads.length;
+            let avgDil = 1.0;
+            if (payloads.length > 0) {
+                avgDil = payloads.reduce((acc, p) => acc + p.dilation, 0) / payloads.length;
+            }
+            document.getElementById('val-dilation').innerText = `${avgDil.toFixed(3)} dτ/dt`;
+            document.getElementById('val-penrose').innerText = `${totalExtracted.toFixed(1)} MeV`;
+            let totalCol = 0, totalRej = 0;
+            for (const c of collectors) {
+                totalCol += c.collected;
+                totalRej += c.rejected;
+            }
+            document.getElementById('val-captured').innerText = `${totalCol} / ${totalCol + totalRej}`;
+            document.getElementById('val-swallowed').innerText = totalSwallowed;
+        }
+
+        // --- 主循环 ---
+        function loop() {
+            updatePhysics();
+            render();
+            requestAnimationFrame(loop);
+        }
+        loop();
+    </script>
+</body>
+</html>
